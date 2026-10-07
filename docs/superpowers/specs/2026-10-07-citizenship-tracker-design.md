@@ -77,6 +77,11 @@ interface Absence {
 | `spouse3` (INA 319(a)) | 3 | 548 days (18 months) | USCIS Policy Manual Vol. 12, Part G |
 | `standard5` (INA 316(a)) | 5 | 913 days (30 months) | USCIS Policy Manual Vol. 12, Part D |
 
+**"The United States"** for this app means the codes `US`, `PR`, `GU`, `VI`
+and `MP` (INA 101(a)(38) plus the CNMI). Time in Puerto Rico, Guam, the US
+Virgin Islands or the Northern Mariana Islands is never an absence. Wherever
+this spec says "US" or "non-US", it means this set.
+
 ### 3.3 Rules
 
 1. **Earliest filing date** `E = addYears(greenCardDate, N) − 90 days`.
@@ -148,6 +153,13 @@ A TravStats trip that counts as an absence has these fields:
 The Add/Edit sheet sends `POST /api/v1/trips` or `PATCH /api/v1/trips/:id`,
 and Delete sends `DELETE /api/v1/trips/:id`.
 
+Two rules for trips that were created from flights (tagged `auto`):
+- **Delete** becomes **Don't count this trip**. The trip is tagged
+  `us-absence-ignored` and `us-absence` is removed. A real delete would only
+  leave its flights trip-less, and the next sync would create the trip again.
+- **Editing** one removes the `auto` tag, so your edit is never overwritten by
+  the flights on the next sync.
+
 Validation:
 - The country must not be US.
 - The departure date is required.
@@ -158,19 +170,18 @@ Validation:
 ### 4.4 Flights → absences (runs on every app load)
 
 **Read.**
-- `GET /api/v1/flights`, paged until every flight is read.
-- `GET /api/v1/airports/:code` for each distinct airport code. The country
-  and zone are cached for the session.
+- `GET /api/v1/flights?all=true`.
+- Each flight already carries `depCountry` and `arrCountry` (ISO codes from
+  the airport catalogue), plus `times.departure` and `times.arrival` in the
+  ADR 0002 shape `{ utc, zone, offset, local, precision }`. The server has
+  already applied the time-semantics rules, so the app does no airport
+  lookups and no timezone math.
 - Flights with status `cancelled` or `duplicated` are ignored.
 - Flights with status `scheduled` are *planned*.
 - Flights with status `flown` or `historical` are *actual*.
 
-**Local day of a flight end.** The rule depends on the time semantics tag:
-- `UTC`: format the instant in the end's frozen `depTimezone`/`arrTimezone`,
-  falling back to the airport catalogue zone.
-- `LEGACY_FAKE_UTC` and `DATE_ONLY`: the stored value's `YYYY-MM-DD` as-is.
-- `UNKNOWN`: same as above, and the resulting absence is marked
-  "date uncertain".
+**Local day of a flight end** = the first 10 characters of `times.<end>.local`.
+A flight with `precision: "unknown"` raises a "date uncertain" notice.
 
 **Pairing.**
 - Sort the flights by departure.
@@ -181,6 +192,10 @@ Validation:
 - US→US flights are ignored, and so are foreign→foreign flights with no
   surrounding exit.
 - If an exit has no later entry, the result is an open absence.
+- If a second exit comes before any entry, you came back without a logged
+  flight (for example, by land). The first absence is closed on the second
+  exit's departure day. That assumes the most time abroad, so it is the
+  conservative choice, and it raises a "return assumed" notice.
 - If an entry has no earlier unpaired exit, the result is an
   *orphan entry*. It raises the warning card "You arrived on X but no
   departure is logged. Add the trip."
@@ -251,8 +266,8 @@ pins this.
 ```
 citizenship-tracker/
   src/domain/    dates.ts  rules.ts  presence.ts  absences.ts
-  src/sync/      flightLocalDay.ts  flightPairing.ts  reconcile.ts  applyOps.ts
-  src/api/       client.ts  auth.ts  trips.ts  flights.ts  airports.ts  appSettings.ts
+  src/sync/      flightPairing.ts  reconcile.ts  applyOps.ts
+  src/api/       client.ts  schemas.ts  travstats.ts
   src/pages/     LoginPage  HomePage  TripsPage  SettingsPage
   src/components/ HeroCard  ApplyDateCard  ProgressRing  StatTile  StatusCard
                   NextTripCard  TripsThatCount  YearBars  TripRow  TripSheet  BottomNav
@@ -295,10 +310,10 @@ unit-tested on its own.
     open absence, the 180 and 365 warnings, planned absences pushing the apply
     date, the 5-year path, and a leave date before the green card date.
 - **`sync/`:**
-  - flightLocalDay, for each time semantics tag, including an LAX departure
-    on 31 Dec at 18:00 local.
   - Pairing: out-and-back, multi-city, unpaired exit, orphan entry, domestic
-    flights only.
+    flights only, a second exit before any entry, a trip to Puerto Rico (not
+    an absence), and a local day taken from `times.*.local` rather than
+    `utc` (an LAX departure on 31 Dec at 18:00).
   - Reconcile: flights already in a trip, overlap with a manual trip, `auto`
     trips rewritten, manual trips untouched, and a second run producing zero
     operations.

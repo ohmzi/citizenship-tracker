@@ -1,4 +1,4 @@
-import { abroadDays, computeSummary } from "./presence";
+import { abroadDays, abroadDaysSince, computeSummary } from "./presence";
 import type { Absence, Settings } from "./types";
 
 const spouse: Settings = { greenCardDate: "2026-09-01", path: "spouse3" };
@@ -104,5 +104,21 @@ describe("computeSummary", () => {
     expect(s.yearBars).toEqual([]);
     expect(s.earliestFilingDate).toBe("2029-09-02");
     expect(s.countdownDays).toBe(1061);
+  });
+
+  it("raises no residence warning for an absence that ended before the green card date", () => {
+    const s = computeSummary(spouse, [trip("a", "2023-05-01", "2026-08-25")], "2026-10-07");
+    expect(s.warnings).toEqual([]);
+    expect(s.status).toBe("on_track");
+  });
+
+  it("measures residence warnings only from the green card date", () => {
+    const a = trip("a", "2026-03-01", "2026-12-01");
+    // 2026-09-01 through 2026-11-30.
+    expect(abroadDaysSince(a, "2026-09-01", "2026-10-07")).toBe(91);
+    const s = computeSummary(spouse, [a], "2026-10-07");
+    expect(s.warnings).toEqual([]);
+    // The trip list still shows the whole trip.
+    expect(s.tripsThatCount[0]!.abroadDays).toBe(274);
   });
 });

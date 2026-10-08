@@ -86,6 +86,12 @@ describe("loadTravelData", () => {
     expect(log).toEqual(["listTrips", "attach:new0:f1,f2", "listTrips"]);
   });
 
+  it("drops arrival notices dated on or before the green card date", async () => {
+    const { api } = fakeApi([leg("f1", "CA", "US", "2026-08-25T18:00"), leg("f2", "CA", "US", "2026-11-02T18:00")], []);
+    const data = await loadTravelData(api, "2026-10-07");
+    expect(data.notices).toEqual([{ kind: "orphan_entry", flightId: "f2", day: "2026-11-02" }]);
+  });
+
   it("tags untagged foreign trips it counts", async () => {
     const europe: TripRecord = {
       id: "e1",

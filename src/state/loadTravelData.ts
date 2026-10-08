@@ -18,6 +18,14 @@ export interface TravelData {
   today: Day;
 }
 
+/** Arrivals and assumed returns on or before the green card date say nothing about residence. */
+function relevant(notices: Notice[], settings: Settings | null): Notice[] {
+  if (!settings) return notices;
+  return notices.filter(
+    (n) => !((n.kind === "orphan_entry" || n.kind === "return_assumed") && n.day <= settings.greenCardDate)
+  );
+}
+
 /** Read TravStats, bring its trips in line with its flights, then compute everything Home shows. */
 export async function loadTravelData(api: TravStatsApi, today: Day): Promise<TravelData> {
   const [user, settings, flights, initialTrips] = await Promise.all([
@@ -48,5 +56,5 @@ export async function loadTravelData(api: TravStatsApi, today: Day): Promise<Tra
   }
 
   const summary = settings ? computeSummary(settings, classification.absences, today) : null;
-  return { user, settings, trips, classification, notices, summary, syncError, today };
+  return { user, settings, trips, classification, notices: relevant(notices, settings), summary, syncError, today };
 }

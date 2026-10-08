@@ -62,6 +62,17 @@ export function abroadDays(a: Absence, today: Day): number {
   return range ? daysBetween(range.from, range.to) + 1 : 0;
 }
 
+/**
+ * Abroad days of `a` on or after `from`. Residence warnings use it with the
+ * green card date: days abroad before permanent residence never break it.
+ */
+export function abroadDaysSince(a: Absence, from: Day, today: Day): number {
+  const range = abroadRange(a, today);
+  if (!range) return 0;
+  const start = maxDay(range.from, from);
+  return start <= range.to ? daysBetween(start, range.to) + 1 : 0;
+}
+
 function calendarDays(a: Absence, today: Day): number {
   const end = a.return ?? today;
   return end < a.leave ? 1 : daysBetween(a.leave, end) + 1;
@@ -151,7 +162,7 @@ export function computeSummary(settings: Settings, absences: Absence[], today: D
 
   const warnings: Warning[] = [];
   for (const a of sorted) {
-    const n = abroadDays(a, today);
+    const n = abroadDaysSince(a, P, today);
     if (n >= BREAK_DAYS) warnings.push({ kind: "breaks_residence", absenceId: a.id, abroadDays: n });
     else if (n > PRESUMED_BREAK_DAYS) warnings.push({ kind: "presumed_break", absenceId: a.id, abroadDays: n });
     if (a.return === null) warnings.push({ kind: "return_not_logged", absenceId: a.id });

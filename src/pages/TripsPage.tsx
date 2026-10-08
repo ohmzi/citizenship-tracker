@@ -3,7 +3,7 @@ import type { TravStatsApi } from "../api/travstats";
 import { Banner } from "../components/Banner";
 import { TripRow } from "../components/TripRow";
 import { TripSheet, ignoreTags, toTripInput, type TripForm } from "../components/TripSheet";
-import { TAG_ABSENCE, TAG_APP, TAG_AUTO, TAG_IGNORED } from "../domain/absences";
+import { TAG_ABSENCE, TAG_APP, TAG_AUTO, TAG_IGNORED, visibleForResidency } from "../domain/absences";
 import type { Absence } from "../domain/types";
 import type { TravelData } from "../state/loadTravelData";
 import { formatRange } from "../ui/format";
@@ -17,9 +17,10 @@ export function TripsPage({ data, api, onChanged }: { data: TravelData; api: Tra
     const tags = tagsOf(id);
     return tags.includes(TAG_APP) && !tags.includes(TAG_AUTO);
   };
-  const absences = [...data.classification.absences].sort((a, b) => (a.leave < b.leave ? 1 : -1));
+  const visible = visibleForResidency(data.classification, data.settings?.greenCardDate ?? null, data.today);
+  const absences = [...visible.absences].sort((a, b) => (a.leave < b.leave ? 1 : -1));
   const nameOf = (id: string) => {
-    const a = data.classification.absences.find((x) => x.id === id);
+    const a = visible.absences.find((x) => x.id === id);
     return a ? (a.countries.length ? tripName(a.countries) : a.name) : id;
   };
 
@@ -77,37 +78,34 @@ export function TripsPage({ data, api, onChanged }: { data: TravelData; api: Tra
       {absences.map((a) => (
         <TripRow key={a.id} absence={a} today={data.today} onClick={() => setEditing(a)} />
       ))}
-      {(data.classification.review.length > 0 || data.classification.overlaps.length > 0) && (
+      {(visible.review.length > 0 || visible.overlaps.length > 0) && (
         <section className="stack">
           <h2>Needs review</h2>
           <p className="muted">These TravStats trips might include time outside the US.</p>
-          {data.classification.overlaps.map(([a, b]) => (
+          {visible.overlaps.map(([a, b]) => (
             <Banner key={`${a}-${b}`} tone="amber">
               {nameOf(a)} and {nameOf(b)} overlap — shared days are counted once.
             </Banner>
           ))}
-          {data.classification.review.map((t) => (
+          {visible.review.map((t) => (
             <div key={t.id} className="card stack">
               <b>{t.name}</b>
               <span className="muted">
                 {t.startDay ? formatRange(t.startDay, t.endDay) : "No dates"} · {t.countries.join(", ") || "no countries"}
               </span>
               <div className="trips-header">
-                {t.startDay && (
-                  <button
-                    type="button"
-                    className="button primary"
-                    onClick={() =>
-                      void act(() => api.updateTrip(t.id, { tags: t.tags.includes(TAG_ABSENCE) ? t.tags : [...t.tags, TAG_ABSENCE] }))
-                    }
-                  >
-                    Count
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="button primary"
+                  onClick={() =>
+                    void act(() => api.updateTrip(t.id, { tags: t.tags.includes(TAG_ABSENCE) ? t.tags : [...t.tags, TAG_ABSENCE] }))
+                  }
+                >
+                  Count
+                </button>
                 <button type="button" className="button ghost" onClick={() => void act(() => api.updateTrip(t.id, { tags: [...t.tags, TAG_IGNORED] }))}>
                   Ignore
                 </button>
-                {!t.startDay && <span className="muted">Add dates to this trip in TravStats to count it.</span>}
               </div>
             </div>
           ))}

@@ -8,6 +8,7 @@ import { StatTile } from "../components/StatTile";
 import { StatusCard } from "../components/StatusCard";
 import { TripsThatCount } from "../components/TripsThatCount";
 import { YearBars } from "../components/YearBars";
+import { visibleForResidency } from "../domain/absences";
 import { flagEmoji } from "../domain/countries";
 import type { TravelData } from "../state/loadTravelData";
 import { formatDayCount, greetingFor } from "../ui/format";
@@ -44,7 +45,7 @@ export function HomePage({ data, hour = new Date().getHours() }: { data: TravelD
           </div>
           <h2>Must-know for Citizenship</h2>
           <StatusCard summary={summary} />
-          <NoticeCards warnings={summary.warnings} notices={notices} absences={classification.absences} reviewCount={classification.review.length} />
+          <NoticeCards warnings={summary.warnings} notices={notices} absences={classification.absences} reviewCount={visibleForResidency(classification, settings?.greenCardDate ?? null, today).review.length} />
           <h2>Your journey in numbers</h2>
           {summary.nextTrip && <NextTripCard trip={summary.nextTrip} />}
           <TripsThatCount trips={summary.tripsThatCount} />

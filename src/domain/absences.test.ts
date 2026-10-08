@@ -1,6 +1,6 @@
-import { classifyTrips, foreignCountries } from "./absences";
+import { classifyTrips, foreignCountries, visibleForResidency, type Classification } from "./absences";
 import { PICKER_COUNTRIES, countryName, flagEmoji } from "./countries";
-import type { TripRecord } from "./types";
+import type { Absence, TripRecord } from "./types";
 
 const t = (over: Partial<TripRecord>): TripRecord => ({
   id: "t",
@@ -76,5 +76,88 @@ describe("classifyTrips", () => {
       t({ id: "c", tags: ["us-absence"], startDay: "2026-10-15", endDay: "2026-10-20" }),
     ]);
     expect(c.overlaps).toEqual([["a", "b"]]);
+  });
+});
+
+describe("visibleForResidency", () => {
+  const GC = "2026-09-01";
+  const TODAY = "2026-10-07";
+  const ab = (id: string, leave: string, ret: string | null): Absence => ({
+    id,
+    name: id,
+    countries: ["CA"],
+    leave,
+    return: ret,
+    source: "travstats",
+  });
+  const cls = (over: Partial<Classification>): Classification => ({ absences: [], review: [], toTag: [], overlaps: [], ...over });
+
+  it("hides an absence that returned before the green card date", () => {
+    const out = visibleForResidency(cls({ absences: [ab("old", "2026-08-10", "2026-08-20")] }), GC, TODAY);
+    expect(out.absences).toEqual([]);
+  });
+
+  it("shows an absence returning on the green card date", () => {
+    const out = visibleForResidency(cls({ absences: [ab("edge", "2026-08-25", "2026-09-01")] }), GC, TODAY);
+    expect(out.absences.map((a) => a.id)).toEqual(["edge"]);
+  });
+
+  it("shows an open absence that left long ago", () => {
+    const out = visibleForResidency(cls({ absences: [ab("open", "2025-03-01", null)] }), GC, TODAY);
+    expect(out.absences.map((a) => a.id)).toEqual(["open"]);
+  });
+
+  it("shows a future trip", () => {
+    const out = visibleForResidency(cls({ absences: [ab("soon", "2026-11-01", "2026-11-05")] }), GC, TODAY);
+    expect(out.absences.map((a) => a.id)).toEqual(["soon"]);
+  });
+
+  it("hides a dateless review trip", () => {
+    const out = visibleForResidency(cls({ review: [t({ id: "r", startDay: null, endDay: null })] }), GC, TODAY);
+    expect(out.review).toEqual([]);
+  });
+
+  it("hides a review trip that ended before the green card date", () => {
+    const out = visibleForResidency(cls({ review: [t({ id: "r", startDay: "2026-04-28", endDay: "2026-05-01" })] }), GC, TODAY);
+    expect(out.review).toEqual([]);
+  });
+
+  it("uses the start day when a review trip has no end", () => {
+    const out = visibleForResidency(
+      cls({ review: [t({ id: "old", startDay: "2026-05-01", endDay: null }), t({ id: "new", startDay: "2026-09-15", endDay: null })] }),
+      GC,
+      TODAY
+    );
+    expect(out.review.map((r) => r.id)).toEqual(["new"]);
+  });
+
+  it("shows a future review trip", () => {
+    const out = visibleForResidency(cls({ review: [t({ id: "r", startDay: "2026-11-01", endDay: "2026-11-05" })] }), GC, TODAY);
+    expect(out.review.map((r) => r.id)).toEqual(["r"]);
+  });
+
+  it("drops an overlap pair that involves a hidden absence", () => {
+    const old = ab("old", "2026-08-10", "2026-08-20");
+    const a = ab("a", "2026-10-01", "2026-10-10");
+    const b = ab("b", "2026-10-05", "2026-10-12");
+    const out = visibleForResidency(
+      cls({ absences: [old, a, b], overlaps: [["old", "a"], ["a", "b"]] }),
+      GC,
+      TODAY
+    );
+    expect(out.overlaps).toEqual([["a", "b"]]);
+  });
+
+  it("shows every dated item without a green card date, but still hides dateless review trips", () => {
+    const out = visibleForResidency(
+      cls({
+        absences: [ab("old", "2020-01-01", "2020-01-10")],
+        review: [t({ id: "dated", startDay: "2019-01-01", endDay: "2019-01-05" }), t({ id: "none", startDay: null, endDay: null })],
+      }),
+      null,
+      TODAY
+    );
+    expect(out.absences.map((a) => a.id)).toEqual(["old"]);
+    expect(out.review.map((r) => r.id)).toEqual(["dated"]);
   });
 });

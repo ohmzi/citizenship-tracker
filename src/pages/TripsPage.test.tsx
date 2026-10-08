@@ -40,7 +40,7 @@ describe("TripsPage", () => {
     expect(screen.getByText(/overlap — shared days are counted once/)).toBeTruthy();
   });
 
-  it("asks for dates instead of offering Count on a review trip without a start", () => {
+  it("does not show a review trip without dates", () => {
     renderTrips({
       classification: {
         absences: [],
@@ -49,8 +49,25 @@ describe("TripsPage", () => {
         overlaps: [],
       },
     } as Partial<TravelData>);
-    expect(screen.getByText("Add dates to this trip in TravStats to count it.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Count" })).toBeNull();
+    expect(screen.queryByText("Trip to Spain")).toBeNull();
+    expect(screen.queryByText("Needs review")).toBeNull();
+    expect(screen.queryByText(/Add dates to this trip/)).toBeNull();
+  });
+
+  it("does not show a TravStats trip that ended before the green card date", () => {
+    const old: Absence = { id: "o1", name: "Old", countries: ["FR"], leave: "2026-05-01", return: "2026-05-10", source: "travstats" };
+    renderTrips({
+      classification: {
+        absences: [canada, old],
+        review: [{ id: "r2", name: "Sumayya's wedding", tags: [], countries: ["CA", "TR"], startDay: "2026-03-01", endDay: "2026-03-09" }],
+        toTag: [],
+        overlaps: [],
+      },
+    } as Partial<TravelData>);
+    expect(screen.getByRole("button", { name: /Canada/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /France/ })).toBeNull();
+    expect(screen.queryByText("Sumayya's wedding")).toBeNull();
+    expect(screen.queryByText("Needs review")).toBeNull();
   });
 
   describe("removing a trip", () => {

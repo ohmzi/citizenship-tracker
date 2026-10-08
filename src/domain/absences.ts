@@ -81,3 +81,22 @@ export function classifyTrips(trips: TripRecord[]): Classification {
   }
   return { absences, review, toTag, overlaps: findOverlaps(absences) };
 }
+
+/**
+ * What the Trips page and the review banner show: trips that can still affect
+ * the count. Display only; the summary and sync use the full classification.
+ */
+export function visibleForResidency(
+  c: Classification,
+  greenCardDate: Day | null,
+  today: Day
+): { absences: Absence[]; review: TripRecord[]; overlaps: Array<[string, string]> } {
+  const absences = c.absences.filter((a) => greenCardDate === null || (a.return ?? today) >= greenCardDate);
+  const review = c.review.filter((t) => {
+    if (t.startDay === null) return false;
+    return greenCardDate === null || (t.endDay ?? t.startDay) >= greenCardDate;
+  });
+  const ids = new Set(absences.map((a) => a.id));
+  const overlaps = c.overlaps.filter(([a, b]) => ids.has(a) && ids.has(b));
+  return { absences, review, overlaps };
+}

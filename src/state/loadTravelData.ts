@@ -1,0 +1,51 @@
+import type { TravStatsApi, User } from "../api/travstats";
+import { TAG_ABSENCE, classifyTrips, type Classification } from "../domain/absences";
+import type { Day } from "../domain/dates";
+import { computeSummary, type Summary } from "../domain/presence";
+import type { Settings, TripRecord } from "../domain/types";
+import { applyOps } from "../sync/applyOps";
+import { pairFlights, type Notice } from "../sync/flightPairing";
+import { reconcile, type Op } from "../sync/reconcile";
+
+export interface TravelData {
+  user: User;
+  settings: Settings | null;
+  trips: TripRecord[];
+  classification: Classification;
+  notices: Notice[];
+  summary: Summary | null;
+  syncError: string | null;
+  today: Day;
+}
+
+/** Read TravStats, bring its trips in line with its flights, then compute everything Home shows. */
+export async function loadTravelData(api: TravStatsApi, today: Day): Promise<TravelData> {
+  const [user, settings, flights, initialTrips] = await Promise.all([
+    api.me(),
+    api.getSettings(),
+    api.listFlights(),
+    api.listTrips(),
+  ]);
+  const { candidates, notices } = pairFlights(flights);
+  let trips = initialTrips;
+  let syncError: string | null = null;
+
+  const flightOps = reconcile(candidates, trips);
+  if (flightOps.length > 0) {
+    syncError = (await applyOps(api, flightOps)).error;
+    trips = await api.listTrips();
+  }
+
+  const classification = classifyTrips(trips);
+  const tagOps: Op[] = classification.toTag.map((t) => ({
+    kind: "tag",
+    tripId: t.id,
+    tags: [...t.tags, TAG_ABSENCE],
+  }));
+  if (tagOps.length > 0) {
+    syncError = syncError ?? (await applyOps(api, tagOps)).error;
+  }
+
+  const summary = settings ? computeSummary(settings, classification.absences, today) : null;
+  return { user, settings, trips, classification, notices, summary, syncError, today };
+}

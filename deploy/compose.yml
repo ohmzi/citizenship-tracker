@@ -1,0 +1,19 @@
+services:
+  citizenship:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: citizenship-tracker:local
+    container_name: citizenship-tracker
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8611:80"
+    networks:
+      - travstats
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  travstats:
+    external: true
+    name: travstats_travstats-network

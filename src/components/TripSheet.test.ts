@@ -31,7 +31,11 @@ describe("trip form", () => {
       tags: ["us-absence", "family"],
     });
     expect(toTripInput({ ...ok, ret: "" }, []).endDate).toBeNull();
-    expect(toTripInput(ok, []).tags).toEqual(["us-absence"]);
+  });
+  it("marks only a new trip as made by this app", () => {
+    expect(toTripInput(ok, []).tags).toEqual(["us-absence", "citizenship-app"]);
+    expect(toTripInput(ok, ["us-absence", "citizenship-app"]).tags).toEqual(["us-absence", "citizenship-app"]);
+    expect(toTripInput(ok, ["family"]).tags).toEqual(["us-absence", "family"]);
   });
   it("ignores a flight-made trip instead of deleting it", () => {
     expect(ignoreTags(["us-absence", "auto"])).toEqual(["auto", "us-absence-ignored"]);

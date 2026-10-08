@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { TripInput } from "../api/travstats";
-import { TAG_ABSENCE, TAG_AUTO, TAG_IGNORED } from "../domain/absences";
+import { TAG_ABSENCE, TAG_APP, TAG_AUTO, TAG_IGNORED } from "../domain/absences";
 import { PICKER_COUNTRIES } from "../domain/countries";
 import { isDay } from "../domain/dates";
 import { isUsJurisdiction } from "../domain/rules";
@@ -25,6 +25,7 @@ export function validateTripForm(form: TripForm, today: string): string | null {
   return null;
 }
 
+/** `existingTags` empty means a new trip, which is marked as this app's. Edits keep their tags. */
 export function toTripInput(form: TripForm, existingTags: string[]): TripInput {
   const kept = existingTags.filter((t) => t !== TAG_AUTO && t !== TAG_ABSENCE);
   return {
@@ -32,11 +33,15 @@ export function toTripInput(form: TripForm, existingTags: string[]): TripInput {
     countries: form.countries,
     startDate: form.leave,
     endDate: form.ret || null,
-    tags: [TAG_ABSENCE, ...kept],
+    tags: existingTags.length === 0 ? [TAG_ABSENCE, TAG_APP] : [TAG_ABSENCE, ...kept],
   };
 }
 
-/** A flight-made trip is never deleted: its flights would recreate it. */
+/**
+ * "Don't count": the trip stays in TravStats. Used for every trip this app
+ * didn't create (it may hold photos, journal or expenses) and for flight-made
+ * trips (their flights would recreate them).
+ */
 export function ignoreTags(existingTags: string[]): string[] {
   return [...existingTags.filter((t) => t !== TAG_ABSENCE), TAG_IGNORED];
 }
@@ -45,6 +50,7 @@ export function TripSheet({
   initial,
   greenCardDate,
   today,
+  canDelete,
   onSave,
   onRemove,
   onClose,
@@ -52,6 +58,8 @@ export function TripSheet({
   initial: Absence | null;
   greenCardDate: string | null;
   today: string;
+  /** Only a trip this app created, and not one made from flights, may really be deleted. */
+  canDelete: boolean;
   onSave: (form: TripForm) => Promise<void>;
   onRemove?: () => Promise<void>;
   onClose: () => void;
@@ -63,7 +71,7 @@ export function TripSheet({
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const removeLabel = initial?.source === "auto" ? "Don't count this trip" : "Delete trip";
+  const removeLabel = canDelete ? "Delete trip" : "Don't count this trip";
 
   async function run(action: () => Promise<void>) {
     setBusy(true);

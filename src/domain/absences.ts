@@ -5,6 +5,8 @@ import type { Absence, AbsenceSource, TripRecord } from "./types";
 export const TAG_ABSENCE = "us-absence";
 export const TAG_IGNORED = "us-absence-ignored";
 export const TAG_AUTO = "auto";
+/** Marks a trip made by this app's Add sheet: the only kind it may delete. */
+export const TAG_APP = "citizenship-app";
 
 export interface Classification {
   absences: Absence[];

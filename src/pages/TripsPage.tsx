@@ -3,7 +3,7 @@ import type { TravStatsApi } from "../api/travstats";
 import { Banner } from "../components/Banner";
 import { TripRow } from "../components/TripRow";
 import { TripSheet, ignoreTags, toTripInput, type TripForm } from "../components/TripSheet";
-import { TAG_ABSENCE, TAG_IGNORED } from "../domain/absences";
+import { TAG_ABSENCE, TAG_APP, TAG_AUTO, TAG_IGNORED } from "../domain/absences";
 import type { Absence } from "../domain/types";
 import type { TravelData } from "../state/loadTravelData";
 import { formatRange } from "../ui/format";
@@ -13,6 +13,10 @@ export function TripsPage({ data, api, onChanged }: { data: TravelData; api: Tra
   const [editing, setEditing] = useState<Absence | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const tagsOf = (id: string) => data.trips.find((t) => t.id === id)?.tags ?? [];
+  const canDelete = (id: string) => {
+    const tags = tagsOf(id);
+    return tags.includes(TAG_APP) && !tags.includes(TAG_AUTO);
+  };
   const absences = [...data.classification.absences].sort((a, b) => (a.leave < b.leave ? 1 : -1));
   const nameOf = (id: string) => {
     const a = data.classification.absences.find((x) => x.id === id);
@@ -31,15 +35,24 @@ export function TripsPage({ data, api, onChanged }: { data: TravelData; api: Tra
 
   async function save(form: TripForm) {
     if (editing === "new") await api.createTrip(toTripInput(form, []));
-    else if (editing) await api.updateTrip(editing.id, toTripInput(form, tagsOf(editing.id)));
+    else if (editing) {
+      // An edit is never a new trip: empty tags (an untagged TravStats trip,
+      // or tags not reloaded yet) must not earn this app's delete marker.
+      const tags = tagsOf(editing.id);
+      await api.updateTrip(editing.id, toTripInput(form, tags.length > 0 ? tags : [TAG_ABSENCE]));
+    }
     setEditing(null);
     await onChanged();
   }
 
   async function remove() {
     if (!editing || editing === "new") return;
-    if (editing.source === "auto") await api.updateTrip(editing.id, { tags: ignoreTags(tagsOf(editing.id)) });
-    else await api.deleteTrip(editing.id);
+    if (canDelete(editing.id)) {
+      if (!window.confirm("Delete this trip from TravStats? This can't be undone.")) return;
+      await api.deleteTrip(editing.id);
+    } else {
+      await api.updateTrip(editing.id, { tags: ignoreTags(tagsOf(editing.id)) });
+    }
     setEditing(null);
     await onChanged();
   }
@@ -105,6 +118,7 @@ export function TripsPage({ data, api, onChanged }: { data: TravelData; api: Tra
           initial={editing === "new" ? null : editing}
           greenCardDate={data.settings?.greenCardDate ?? null}
           today={data.today}
+          canDelete={editing !== "new" && canDelete(editing.id)}
           onSave={save}
           onRemove={editing === "new" ? undefined : remove}
           onClose={() => setEditing(null)}

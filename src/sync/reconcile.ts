@@ -39,39 +39,66 @@ function overlaps(trip: TripRecord, c: Candidate): boolean {
 }
 
 const counts = (t: TripRecord) => t.tags.includes(TAG_ABSENCE) && !t.tags.includes(TAG_IGNORED);
+const isAuto = (t: TripRecord) => t.tags.includes(TAG_AUTO);
+
+/** The visible trip a candidate's flights belong to: the first non-auto one, else the first visible. */
+function ownerOf(c: Candidate, byId: Map<string, TripRecord>): TripRecord | undefined {
+  const visible = c.tripIds.map((id) => byId.get(id)).filter((t): t is TripRecord => t !== undefined);
+  return visible.find((t) => !isAuto(t)) ?? visible[0];
+}
+
+/**
+ * Where a candidate's flights belong:
+ * - "skip": its flights sit in trips this app cannot see, so leave them alone;
+ * - "none": no trip fits, so one must be created;
+ * - "trip": its owner, else an overlapping counted manual trip, else an
+ *   overlapping counted auto trip no flight points to (an orphan left by an
+ *   interrupted earlier sync).
+ * reconcile and dateMismatches both resolve through here so they never drift.
+ */
+export type Target = { kind: "skip" } | { kind: "none" } | { kind: "trip"; trip: TripRecord };
+
+export function targetFor(
+  c: Candidate,
+  trips: TripRecord[],
+  byId: Map<string, TripRecord>,
+  flightTripIds: ReadonlySet<string>
+): Target {
+  const owner = ownerOf(c, byId);
+  if (owner) return { kind: "trip", trip: owner };
+  if (c.tripIds.length > 0) return { kind: "skip" };
+  const manual = trips.find((t) => counts(t) && !isAuto(t) && overlaps(t, c));
+  if (manual) return { kind: "trip", trip: manual };
+  const orphan = trips.find((t) => counts(t) && isAuto(t) && !flightTripIds.has(t.id) && overlaps(t, c));
+  return orphan ? { kind: "trip", trip: orphan } : { kind: "none" };
+}
 
 /**
  * What to change in TravStats so every flight-implied absence is a counted trip.
  * Pure. Never deletes, never moves a flight between trips, and returns no ops
- * once its previous ops have been applied.
+ * once its previous ops have been applied. `flightTripIds` is every non-null
+ * tripId on any flight; an auto trip outside it has no flights and may be adopted.
  */
-/** The visible trip a candidate's flights belong to: the first non-auto one, else the first visible. */
-function ownerOf(c: Candidate, byId: Map<string, TripRecord>): TripRecord | undefined {
-  const visible = c.tripIds.map((id) => byId.get(id)).filter((t): t is TripRecord => t !== undefined);
-  return visible.find((t) => !t.tags.includes(TAG_AUTO)) ?? visible[0];
-}
-
-export function reconcile(candidates: Candidate[], trips: TripRecord[]): Op[] {
+export function reconcile(candidates: Candidate[], trips: TripRecord[], flightTripIds: ReadonlySet<string>): Op[] {
   const byId = new Map(trips.map((t) => [t.id, t]));
   const ops: Op[] = [];
   const tagged = new Set<string>();
 
-  const owners = candidates.map((c) => ownerOf(c, byId));
+  const targets = candidates.map((c) => targetFor(c, trips, byId, flightTripIds));
   const claims = new Map<string, number>();
-  for (const o of owners) {
-    if (o) claims.set(o.id, (claims.get(o.id) ?? 0) + 1);
+  for (const t of targets) {
+    if (t.kind === "trip") claims.set(t.trip.id, (claims.get(t.trip.id) ?? 0) + 1);
   }
 
   candidates.forEach((c, i) => {
     const fields = fieldsFor(c);
-    const owner = owners[i];
-    if (c.tripIds.length > 0 && !owner) return;
-
-    const target = owner ?? trips.find((t) => counts(t) && !t.tags.includes(TAG_AUTO) && overlaps(t, c));
-    if (!target) {
+    const resolved = targets[i]!;
+    if (resolved.kind === "skip") return;
+    if (resolved.kind === "none") {
       ops.push({ kind: "create", fields, tags: [TAG_ABSENCE, TAG_AUTO], flightIds: c.flightIds });
       return;
     }
+    const target = resolved.trip;
     if (target.tags.includes(TAG_IGNORED)) return;
 
     if (!target.tags.includes(TAG_ABSENCE) && !tagged.has(target.id)) {
@@ -81,13 +108,9 @@ export function reconcile(candidates: Candidate[], trips: TripRecord[]): Op[] {
     if (c.looseFlightIds.length > 0) {
       ops.push({ kind: "attach", tripId: target.id, flightIds: c.looseFlightIds });
     }
-    if (
-      owner !== undefined &&
-      owner.tags.includes(TAG_AUTO) &&
-      claims.get(owner.id) === 1 &&
-      !sameFields(owner, fields)
-    ) {
-      ops.push({ kind: "update", tripId: owner.id, fields });
+    // Only an auto trip is rewritten, and only when this candidate alone claims it.
+    if (isAuto(target) && claims.get(target.id) === 1 && !sameFields(target, fields)) {
+      ops.push({ kind: "update", tripId: target.id, fields });
     }
   });
   return ops;

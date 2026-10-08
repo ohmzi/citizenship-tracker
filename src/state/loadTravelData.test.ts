@@ -71,6 +71,21 @@ describe("loadTravelData", () => {
     expect(log).toEqual(["listTrips"]);
   });
 
+  it("adopts the trip an interrupted sync created instead of creating a second one", async () => {
+    const flights = [leg("f1", "US", "CA", "2026-10-23T08:00"), leg("f2", "CA", "US", "2026-10-30T18:00")];
+    const { api, log } = fakeApi(flights, []);
+    const assign = api.assignFlights;
+    api.assignFlights = async () => {
+      throw new Error("network");
+    };
+    expect((await loadTravelData(api, "2026-10-07")).syncError).toBe("network");
+
+    api.assignFlights = assign;
+    log.length = 0;
+    await loadTravelData(api, "2026-10-07");
+    expect(log).toEqual(["listTrips", "attach:new0:f1,f2", "listTrips"]);
+  });
+
   it("tags untagged foreign trips it counts", async () => {
     const europe: TripRecord = {
       id: "e1",

@@ -21,6 +21,9 @@ const trip = (over: Partial<TripRecord>): TripRecord => ({
   endDay: "2026-10-30",
   ...over,
 });
+/** Every tripId any flight carries, as loadTravelData builds it. */
+const refs = (cs: Candidate[], extra: string[] = []) => new Set([...cs.flatMap((c) => c.tripIds), ...extra]);
+const run = (cs: Candidate[], trips: TripRecord[], extra: string[] = []) => reconcile(cs, trips, refs(cs, extra));
 const fields = { name: "Canada", countries: ["CA"], startDate: "2026-10-23", endDate: "2026-10-30" };
 
 describe("reconcile", () => {
@@ -30,14 +33,14 @@ describe("reconcile", () => {
   });
 
   it("creates a tagged trip for flights that have none", () => {
-    expect(reconcile([candidate()], [])).toEqual([
+    expect(run([candidate()], [])).toEqual([
       { kind: "create", fields, tags: ["us-absence", "auto"], flightIds: ["f1", "f2"] },
     ]);
   });
 
   it("tags the trip the flights already belong to and attaches the rest", () => {
     const owner = trip({ id: "t9", name: "Toronto weekend", tags: ["family"] });
-    const ops = reconcile([candidate({ tripIds: ["t9"], looseFlightIds: ["f2"] })], [owner]);
+    const ops = run([candidate({ tripIds: ["t9"], looseFlightIds: ["f2"] })], [owner]);
     expect(ops).toEqual([
       { kind: "tag", tripId: "t9", tags: ["family", "us-absence"] },
       { kind: "attach", tripId: "t9", flightIds: ["f2"] },
@@ -46,29 +49,29 @@ describe("reconcile", () => {
 
   it("leaves flights of an ignored trip alone", () => {
     const ignored = trip({ id: "t9", tags: ["us-absence-ignored"] });
-    expect(reconcile([candidate({ tripIds: ["t9"], looseFlightIds: [] })], [ignored])).toEqual([]);
+    expect(run([candidate({ tripIds: ["t9"], looseFlightIds: [] })], [ignored])).toEqual([]);
   });
 
   it("never moves flights whose trip it cannot see", () => {
-    expect(reconcile([candidate({ tripIds: ["unknown"], looseFlightIds: ["f2"] })], [])).toEqual([]);
+    expect(run([candidate({ tripIds: ["unknown"], looseFlightIds: ["f2"] })], [])).toEqual([]);
   });
 
   it("attaches flights to an overlapping manual absence without rewriting it", () => {
     const manual = trip({ id: "m1", tags: ["us-absence"], startDay: "2026-10-22", endDay: "2026-10-31" });
-    expect(reconcile([candidate()], [manual])).toEqual([
+    expect(run([candidate()], [manual])).toEqual([
       { kind: "attach", tripId: "m1", flightIds: ["f1", "f2"] },
     ]);
   });
 
   it("rewrites an auto trip whose flights changed", () => {
     const auto = trip({ id: "a1", tags: ["us-absence", "auto"], endDay: "2026-10-29" });
-    const ops = reconcile([candidate({ tripIds: ["a1"], looseFlightIds: [] })], [auto]);
+    const ops = run([candidate({ tripIds: ["a1"], looseFlightIds: [] })], [auto]);
     expect(ops).toEqual([{ kind: "update", tripId: "a1", fields }]);
   });
 
   it("is idempotent once its ops are applied", () => {
     const applied = trip({ id: "new", tags: ["us-absence", "auto"], countries: ["US", "CA"] });
-    expect(reconcile([candidate({ tripIds: ["new"], looseFlightIds: [] })], [applied])).toEqual([]);
+    expect(run([candidate({ tripIds: ["new"], looseFlightIds: [] })], [applied])).toEqual([]);
   });
 
   it("never lets a boundary-sharing candidate claim or rewrite another's auto trip", () => {
@@ -94,7 +97,7 @@ describe("reconcile", () => {
       leave: "2026-10-10",
       return: "2026-10-20",
     });
-    expect(reconcile([c1, c2], [a])).toEqual([
+    expect(run([c1, c2], [a])).toEqual([
       {
         kind: "create",
         fields: { name: "Canada", countries: ["CA"], startDate: "2026-10-10", endDate: "2026-10-20" },
@@ -126,13 +129,48 @@ describe("reconcile", () => {
       leave: "2026-10-01",
       return: "2026-10-15",
     });
-    expect(reconcile([c1, c2], [a])).toEqual([]);
+    expect(run([c1, c2], [a])).toEqual([]);
   });
 
   it("attaches loose flights to a candidate's manual trip rather than its auto trip", () => {
     const a = trip({ id: "A", tags: ["us-absence", "auto"], startDay: "2026-10-23", endDay: "2026-10-30" });
     const m = trip({ id: "M", tags: ["us-absence"], startDay: "2026-10-23", endDay: "2026-10-30" });
-    const ops = reconcile([candidate({ tripIds: ["A", "M"], looseFlightIds: ["f9"] })], [a, m]);
+    const ops = run([candidate({ tripIds: ["A", "M"], looseFlightIds: ["f9"] })], [a, m]);
     expect(ops).toEqual([{ kind: "attach", tripId: "M", flightIds: ["f9"] }]);
+  });
+
+  it("adopts an orphan auto trip with matching dates instead of creating another", () => {
+    const orphan = trip({ id: "A", tags: ["us-absence", "auto"] });
+    expect(run([candidate()], [orphan])).toEqual([{ kind: "attach", tripId: "A", flightIds: ["f1", "f2"] }]);
+  });
+
+  it("adopts an orphan auto trip with other dates and rewrites it", () => {
+    const orphan = trip({ id: "A", tags: ["us-absence", "auto"], startDay: "2026-10-24", endDay: "2026-10-29" });
+    expect(run([candidate()], [orphan])).toEqual([
+      { kind: "attach", tripId: "A", flightIds: ["f1", "f2"] },
+      { kind: "update", tripId: "A", fields },
+    ]);
+  });
+
+  it("prefers an overlapping manual trip over an orphan auto trip", () => {
+    const orphan = trip({ id: "A", tags: ["us-absence", "auto"] });
+    const manual = trip({ id: "M", tags: ["us-absence"] });
+    expect(run([candidate()], [orphan, manual])).toEqual([{ kind: "attach", tripId: "M", flightIds: ["f1", "f2"] }]);
+  });
+
+  it("never adopts an auto trip that some flight points to", () => {
+    const owned = trip({ id: "A", tags: ["us-absence", "auto"] });
+    expect(run([candidate()], [owned], ["A"])).toEqual([
+      { kind: "create", fields, tags: ["us-absence", "auto"], flightIds: ["f1", "f2"] },
+    ]);
+  });
+
+  it("never rewrites an orphan auto trip two candidates adopt", () => {
+    const orphan = trip({ id: "A", tags: ["us-absence", "auto"], startDay: "2026-10-01", endDay: "2026-10-31" });
+    const c2 = candidate({ flightIds: ["f3"], looseFlightIds: ["f3"], leave: "2026-10-25", return: "2026-10-28" });
+    expect(run([candidate(), c2], [orphan])).toEqual([
+      { kind: "attach", tripId: "A", flightIds: ["f1", "f2"] },
+      { kind: "attach", tripId: "A", flightIds: ["f3"] },
+    ]);
   });
 });

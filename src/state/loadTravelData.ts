@@ -30,7 +30,8 @@ export async function loadTravelData(api: TravStatsApi, today: Day): Promise<Tra
   let trips = initialTrips;
   let syncError: string | null = null;
 
-  const flightOps = reconcile(candidates, trips);
+  const flightTripIds = new Set(flights.flatMap((f) => (f.tripId === null ? [] : [f.tripId])));
+  const flightOps = reconcile(candidates, trips, flightTripIds);
   if (flightOps.length > 0) {
     syncError = (await applyOps(api, flightOps)).error;
     trips = await api.listTrips();

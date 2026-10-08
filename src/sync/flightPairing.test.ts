@@ -110,4 +110,39 @@ describe("pairFlights", () => {
     expect(c.tripIds).toEqual(["t9"]);
     expect(c.looseFlightIds).toEqual([back.id]);
   });
+
+  it("pairs an exit with no arrival time on its departure day and flags it", () => {
+    const out = flight("US", "CA", "2026-10-23T08:00", "2026-10-23T10:00", { arrival: null });
+    const back = flight("CA", "US", "2026-10-30T18:00", "2026-10-30T20:00");
+    const { candidates, notices } = pairFlights([out, back]);
+    expect(candidates.map((c) => [c.flightIds, c.leave, c.return])).toEqual([[[out.id, back.id], "2026-10-23", "2026-10-30"]]);
+    expect(notices).toEqual([{ kind: "date_uncertain", flightId: out.id }]);
+  });
+
+  it("dates an entry with no arrival time by its departure's local day", () => {
+    const out = flight("US", "CA", "2026-10-23T08:00", "2026-10-23T10:00");
+    const back = flight("CA", "US", "2026-10-30T23:00", "2026-10-31T01:00", { arrival: null });
+    expect(pairFlights([out, back]).candidates[0]!.return).toBe("2026-10-30");
+  });
+
+  it("reports a flight missing its date or a country instead of dropping it silently", () => {
+    const noCountry = flight("US", "CA", "2026-10-23T08:00", "2026-10-23T10:00", { depCountry: null });
+    const noArrCountry = flight("US", "CA", "2026-10-24T08:00", "2026-10-24T10:00", { arrCountry: null });
+    const noDate = flight("US", "CA", "2026-10-25T08:00", "2026-10-25T10:00", { departure: null });
+    const { candidates, notices } = pairFlights([noCountry, noArrCountry, noDate]);
+    expect(candidates).toEqual([]);
+    expect(notices).toEqual([
+      { kind: "flight_incomplete", flightId: noCountry.id },
+      { kind: "flight_incomplete", flightId: noArrCountry.id },
+      { kind: "flight_incomplete", flightId: noDate.id },
+    ]);
+  });
+
+  it("stays silent about cancelled and duplicated flights, however incomplete", () => {
+    const { notices } = pairFlights([
+      flight("US", "CA", "2026-10-23T08:00", "2026-10-23T10:00", { status: "cancelled", depCountry: null }),
+      flight("US", "CA", "2026-10-24T08:00", "2026-10-24T10:00", { status: "duplicated", departure: null }),
+    ]);
+    expect(notices).toEqual([]);
+  });
 });

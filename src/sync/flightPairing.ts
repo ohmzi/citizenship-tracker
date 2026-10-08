@@ -21,6 +21,8 @@ export type Notice =
   | { kind: "orphan_entry"; flightId: string; day: Day }
   | { kind: "return_assumed"; flightId: string; day: Day }
   | { kind: "date_uncertain"; flightId: string }
+  /** A flight with no departure time or no airport country: it can't be placed, so it isn't counted. */
+  | { kind: "flight_incomplete"; flightId: string }
   /** Flights paired into this absence run outside the dates of the manual trip they belong with. */
   | {
       kind: "dates_mismatch";
@@ -34,27 +36,38 @@ export type Notice =
 
 interface Leg {
   flight: FlightRecord;
+  /** Departure time; sorting and day math use it. */
+  departure: NonNullable<FlightRecord["departure"]>;
   depUs: boolean;
   arrUs: boolean;
   depCountry: string;
   arrCountry: string;
   departureDay: Day;
   arrivalDay: Day;
+  /** A date part is estimated or missing, so the user should check it. */
+  uncertain: boolean;
 }
 
-function toLeg(f: FlightRecord): Leg | null {
+function toLeg(f: FlightRecord, notices: Notice[]): Leg | null {
   if (IGNORED_STATUSES.has(f.status)) return null;
-  if (!f.departure || !f.arrival || !f.depCountry || !f.arrCountry) return null;
+  if (!f.departure || !f.depCountry || !f.arrCountry) {
+    notices.push({ kind: "flight_incomplete", flightId: f.id });
+    return null;
+  }
+  // The server already resolved the airport's clock (ADR 0002); the local
+  // wall clock's date is the day as the traveller lived it.
+  const departureDay = f.departure.local.slice(0, 10);
   return {
     flight: f,
+    departure: f.departure,
     depUs: isUsJurisdiction(f.depCountry),
     arrUs: isUsJurisdiction(f.arrCountry),
     depCountry: f.depCountry,
     arrCountry: f.arrCountry,
-    // The server already resolved the airport's clock (ADR 0002); the local
-    // wall clock's date is the day as the traveller lived it.
-    departureDay: f.departure.local.slice(0, 10),
-    arrivalDay: f.arrival.local.slice(0, 10),
+    departureDay,
+    // No arrival time: assume it landed the day it left, and say so.
+    arrivalDay: f.arrival ? f.arrival.local.slice(0, 10) : departureDay,
+    uncertain: f.departure.precision === "unknown" || !f.arrival || f.arrival.precision === "unknown",
   };
 }
 
@@ -70,20 +83,18 @@ function addCountry(c: Candidate, code: string): void {
 }
 
 export function pairFlights(flights: FlightRecord[]): { candidates: Candidate[]; notices: Notice[] } {
-  const legs = flights
-    .map(toLeg)
-    .filter((leg): leg is Leg => leg !== null)
-    .sort((a, b) => a.flight.departure!.utc.localeCompare(b.flight.departure!.utc));
-
   const candidates: Candidate[] = [];
   const notices: Notice[] = [];
+  const legs = flights
+    .map((f) => toLeg(f, notices))
+    .filter((leg): leg is Leg => leg !== null)
+    .sort((a, b) => a.departure.utc.localeCompare(b.departure.utc));
+
   let open: Candidate | null = null;
 
   for (const leg of legs) {
     const { flight } = leg;
-    if (flight.departure!.precision === "unknown" || flight.arrival!.precision === "unknown") {
-      notices.push({ kind: "date_uncertain", flightId: flight.id });
-    }
+    if (leg.uncertain) notices.push({ kind: "date_uncertain", flightId: flight.id });
     const isExit = leg.depUs && !leg.arrUs;
     const isEntry = !leg.depUs && leg.arrUs;
 

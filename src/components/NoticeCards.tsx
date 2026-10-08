@@ -64,6 +64,12 @@ function noticeCard(n: Notice): JSX.Element {
           A flight's date is uncertain in TravStats — check it so your count stays right.
         </Banner>
       );
+    case "flight_incomplete":
+      return (
+        <Banner key={`i${n.flightId}`} tone="amber">
+          A flight in TravStats is missing its date or airport country, so it can't be counted. Check it in TravStats.
+        </Banner>
+      );
     case "dates_mismatch":
       return (
         <Banner key={`m${n.tripId}-${n.flightLeave}`} tone="amber">

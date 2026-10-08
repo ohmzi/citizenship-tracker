@@ -86,4 +86,13 @@ describe("HomePage", () => {
       )
     ).toBeTruthy();
   });
+
+  it("warns about a flight that can't be counted", () => {
+    renderHome({ notices: [{ kind: "flight_incomplete", flightId: "f9" }] });
+    expect(
+      screen.getByText(
+        "A flight in TravStats is missing its date or airport country, so it can't be counted. Check it in TravStats."
+      )
+    ).toBeTruthy();
+  });
 });

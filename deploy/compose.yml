@@ -1,3 +1,5 @@
+name: citizenship-tracker
+
 services:
   citizenship:
     build:

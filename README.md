@@ -20,6 +20,9 @@ The container joins TravStats' Docker network and proxies `/api/v1` to
 
     docker compose -f deploy/compose.yml up -d --build   # http://127.0.0.1:8611
 
+The compose project is named `citizenship-tracker`, so its `--remove-orphans`
+and `down` never touch containers from other compose projects.
+
 Point the tunnel hostname at `http://localhost:8611` and put a Cloudflare
 Access policy on it. Add this container's network (`192.168.80.0/20`) to
 TravStats' `TRUST_PROXY` so login rate limits stay per visitor.

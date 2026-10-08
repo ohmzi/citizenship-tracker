@@ -65,4 +65,25 @@ describe("HomePage", () => {
     ).toBeTruthy();
     expect(screen.queryByText(/counts as abroad through today/)).toBeNull();
   });
+
+  it("points out flight dates that disagree with a trip", () => {
+    renderHome({
+      notices: [
+        {
+          kind: "dates_mismatch",
+          tripId: "t1",
+          tripName: "Toronto",
+          tripStart: "2026-10-23",
+          tripEnd: "2026-10-30",
+          flightLeave: "2026-10-21",
+          flightReturn: "2026-11-02",
+        },
+      ],
+    });
+    expect(
+      screen.getByText(
+        "Your flights show Oct 21 - Nov 2, 2026, but Toronto says Oct 23 - Oct 30, 2026. Edit the trip if the flights are right."
+      )
+    ).toBeTruthy();
+  });
 });

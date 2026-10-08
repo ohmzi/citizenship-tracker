@@ -1,4 +1,4 @@
-import { reconcile, tripName } from "./reconcile";
+import { dateMismatches, reconcile, tripName } from "./reconcile";
 import type { Candidate } from "./flightPairing";
 import type { TripRecord } from "../domain/types";
 
@@ -172,5 +172,32 @@ describe("reconcile", () => {
       { kind: "attach", tripId: "A", flightIds: ["f1", "f2"] },
       { kind: "attach", tripId: "A", flightIds: ["f3"] },
     ]);
+  });
+});
+
+describe("dateMismatches", () => {
+  const manual = trip({ id: "m1", name: "Toronto", tags: ["us-absence"] });
+
+  it("reports flights that run outside the manual trip they belong with", () => {
+    const c = candidate({ leave: "2026-10-21", return: "2026-11-02" });
+    expect(dateMismatches([c], [manual], refs([c]))).toEqual([
+      {
+        tripId: "m1",
+        tripName: "Toronto",
+        tripStart: "2026-10-23",
+        tripEnd: "2026-10-30",
+        flightLeave: "2026-10-21",
+        flightReturn: "2026-11-02",
+      },
+    ]);
+  });
+
+  it("reports nothing when the dates agree", () => {
+    expect(dateMismatches([candidate()], [manual], refs([candidate()]))).toEqual([]);
+  });
+
+  it("reports nothing for a flight-made trip, which sync rewrites itself", () => {
+    const c = candidate({ tripIds: ["a1"], looseFlightIds: [], leave: "2026-10-21" });
+    expect(dateMismatches([c], [trip({ id: "a1", tags: ["us-absence", "auto"] })], refs([c]))).toEqual([]);
   });
 });

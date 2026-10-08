@@ -20,7 +20,17 @@ export interface Candidate {
 export type Notice =
   | { kind: "orphan_entry"; flightId: string; day: Day }
   | { kind: "return_assumed"; flightId: string; day: Day }
-  | { kind: "date_uncertain"; flightId: string };
+  | { kind: "date_uncertain"; flightId: string }
+  /** Flights paired into this absence run outside the dates of the manual trip they belong with. */
+  | {
+      kind: "dates_mismatch";
+      tripId: string;
+      tripName: string;
+      tripStart: Day;
+      tripEnd: Day | null;
+      flightLeave: Day;
+      flightReturn: Day | null;
+    };
 
 interface Leg {
   flight: FlightRecord;

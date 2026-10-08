@@ -64,6 +64,12 @@ function noticeCard(n: Notice): JSX.Element {
           A flight's date is uncertain in TravStats — check it so your count stays right.
         </Banner>
       );
+    case "dates_mismatch":
+      return (
+        <Banner key={`m${n.tripId}-${n.flightLeave}`} tone="amber">
+          Your flights show {formatRange(n.flightLeave, n.flightReturn)}, but {n.tripName} says {formatRange(n.tripStart, n.tripEnd)}. Edit the trip if the flights are right.
+        </Banner>
+      );
     default:
       return unhandled(n);
   }

@@ -92,6 +92,31 @@ describe("loadTravelData", () => {
     expect(data.notices).toEqual([{ kind: "orphan_entry", flightId: "f2", day: "2026-11-02" }]);
   });
 
+  it("tells the user when flights disagree with the manual trip they join", async () => {
+    const toronto: TripRecord = {
+      id: "m1",
+      name: "Toronto",
+      tags: ["us-absence"],
+      countries: ["CA"],
+      startDay: "2026-10-23",
+      endDay: "2026-10-30",
+    };
+    const flights = [leg("f1", "US", "CA", "2026-10-21T08:00"), leg("f2", "CA", "US", "2026-11-02T18:00")];
+    const { api } = fakeApi(flights, [toronto]);
+    const data = await loadTravelData(api, "2026-10-07");
+    expect(data.notices).toEqual([
+      {
+        kind: "dates_mismatch",
+        tripId: "m1",
+        tripName: "Toronto",
+        tripStart: "2026-10-23",
+        tripEnd: "2026-10-30",
+        flightLeave: "2026-10-21",
+        flightReturn: "2026-11-02",
+      },
+    ]);
+  });
+
   it("tags untagged foreign trips it counts", async () => {
     const europe: TripRecord = {
       id: "e1",

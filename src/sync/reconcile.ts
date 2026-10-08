@@ -115,3 +115,44 @@ export function reconcile(candidates: Candidate[], trips: TripRecord[], flightTr
   });
   return ops;
 }
+
+export interface DateMismatch {
+  tripId: string;
+  tripName: string;
+  tripStart: Day;
+  tripEnd: Day | null;
+  flightLeave: Day;
+  flightReturn: Day | null;
+}
+
+/**
+ * Candidates whose flights run outside the manual trip they resolve to.
+ * reconcile never rewrites a manual trip, so the user is told instead.
+ * Pure; never emits ops. Auto trips are left out (sync rewrites them), and so
+ * are ignored trips (the user chose not to count them) and undated ones.
+ */
+export function dateMismatches(
+  candidates: Candidate[],
+  trips: TripRecord[],
+  flightTripIds: ReadonlySet<string>
+): DateMismatch[] {
+  const byId = new Map(trips.map((t) => [t.id, t]));
+  const out: DateMismatch[] = [];
+  for (const c of candidates) {
+    const resolved = targetFor(c, trips, byId, flightTripIds);
+    if (resolved.kind !== "trip") continue;
+    const t = resolved.trip;
+    if (isAuto(t) || t.tags.includes(TAG_IGNORED) || !t.startDay) continue;
+    if (c.leave < t.startDay || (c.return ?? FAR_FUTURE) > (t.endDay ?? FAR_FUTURE)) {
+      out.push({
+        tripId: t.id,
+        tripName: t.name,
+        tripStart: t.startDay,
+        tripEnd: t.endDay,
+        flightLeave: c.leave,
+        flightReturn: c.return,
+      });
+    }
+  }
+  return out;
+}

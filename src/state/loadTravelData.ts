@@ -5,7 +5,7 @@ import { computeSummary, type Summary } from "../domain/presence";
 import type { Settings, TripRecord } from "../domain/types";
 import { applyOps } from "../sync/applyOps";
 import { pairFlights, type Notice } from "../sync/flightPairing";
-import { reconcile, type Op } from "../sync/reconcile";
+import { dateMismatches, reconcile, type Op } from "../sync/reconcile";
 
 export interface TravelData {
   user: User;
@@ -45,6 +45,11 @@ export async function loadTravelData(api: TravStatsApi, today: Day): Promise<Tra
     trips = await api.listTrips();
   }
 
+  const mismatches: Notice[] = dateMismatches(candidates, trips, flightTripIds).map((m) => ({
+    kind: "dates_mismatch",
+    ...m,
+  }));
+
   const classification = classifyTrips(trips);
   const tagOps: Op[] = classification.toTag.map((t) => ({
     kind: "tag",
@@ -56,5 +61,5 @@ export async function loadTravelData(api: TravStatsApi, today: Day): Promise<Tra
   }
 
   const summary = settings ? computeSummary(settings, classification.absences, today) : null;
-  return { user, settings, trips, classification, notices: relevant(notices, settings), summary, syncError, today };
+  return { user, settings, trips, classification, notices: relevant([...notices, ...mismatches], settings), summary, syncError, today };
 }

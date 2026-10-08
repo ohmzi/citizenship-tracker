@@ -16,15 +16,23 @@ describe("SettingsPage", () => {
     render(<SettingsPage data={data} api={{ saveSettings } as unknown as TravStatsApi} onSaved={onSaved} />);
     fireEvent.change(screen.getByLabelText("Green card date"), { target: { value: "2026-09-01" } });
     fireEvent.click(screen.getByLabelText(/3-year/));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(saveSettings).toHaveBeenCalledWith({ greenCardDate: "2026-09-01", path: "spouse3" });
   });
 
+  it("shows no Save bar on first-time setup until a valid date is entered", () => {
+    render(<SettingsPage data={data} api={{} as unknown as TravStatsApi} onSaved={async () => {}} />);
+    expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Green card date"), { target: { value: "2026-09-01" } });
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeTruthy();
+  });
+
   it("refuses to save without a date", async () => {
     const saveSettings = vi.fn(async () => {});
-    render(<SettingsPage data={data} api={{ saveSettings } as unknown as TravStatsApi} onSaved={async () => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const { container } = render(<SettingsPage data={data} api={{ saveSettings } as unknown as TravStatsApi} onSaved={async () => {}} />);
+    // There is no Save button while the form is empty, but Enter in a field still submits it.
+    fireEvent.submit(container.querySelector("form")!);
     expect(await screen.findByText("Enter your green card date.")).toBeTruthy();
     expect(saveSettings).not.toHaveBeenCalled();
   });
@@ -53,7 +61,7 @@ describe("SettingsPage", () => {
     }
 
     function unlockAndChange(value: string) {
-      fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+      fireEvent.click(screen.getByRole("button", { name: "Edit green card date" }));
       fireEvent.click(screen.getByRole("button", { name: "Unlock" }));
       fireEvent.change(screen.getByLabelText("Green card date"), { target: { value } });
     }
@@ -61,13 +69,13 @@ describe("SettingsPage", () => {
     it("shows the date locked, with an Edit button and no date input", () => {
       setup();
       expect(screen.getByText("🔒 September 1, 2026")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Edit green card date" })).toBeTruthy();
       expect(screen.queryByLabelText("Green card date")).toBeNull();
     });
 
     it("warns on Edit, and Cancel re-locks without saving", () => {
       const { saveSettings } = setup();
-      fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+      fireEvent.click(screen.getByRole("button", { name: "Edit green card date" }));
       expect(
         screen.getByText(
           "Your green card date drives every number in this app: your apply date, days in the USA and which trips count. Only change it if it's wrong.",
@@ -81,7 +89,7 @@ describe("SettingsPage", () => {
 
     it("Unlock shows the date input prefilled with the saved date", () => {
       setup();
-      fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+      fireEvent.click(screen.getByRole("button", { name: "Edit green card date" }));
       fireEvent.click(screen.getByRole("button", { name: "Unlock" }));
       expect((screen.getByLabelText("Green card date") as HTMLInputElement).value).toBe("2026-09-01");
     });
@@ -89,12 +97,13 @@ describe("SettingsPage", () => {
     it("asks to confirm a changed date before saving, then saves on Yes", async () => {
       const { saveSettings, onSaved } = setup();
       unlockAndChange("2026-08-15");
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
       expect(
         screen.getByText(
-          "Change your green card date from September 1, 2026 to August 15, 2026? This recalculates your entire timeline. Be very careful.",
+          "Change your green card date from September 1, 2026 to August 15, 2026?",
         ),
       ).toBeTruthy();
+      expect(screen.getByText("This recalculates your entire timeline. Be very careful.")).toBeTruthy();
       expect(saveSettings).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
       await waitFor(() => expect(onSaved).toHaveBeenCalled());
@@ -106,7 +115,7 @@ describe("SettingsPage", () => {
     it("Cancel on the confirmation restores the saved date and does not save", () => {
       const { saveSettings } = setup();
       unlockAndChange("2026-08-15");
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
       expect(saveSettings).not.toHaveBeenCalled();
       expect(screen.getByText("🔒 September 1, 2026")).toBeTruthy();
@@ -117,14 +126,14 @@ describe("SettingsPage", () => {
     it("dismisses the confirmation when the date is edited, even to an empty value", () => {
       const { saveSettings } = setup();
       unlockAndChange("2026-08-15");
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
       expect(screen.getByText(/Be very careful/)).toBeTruthy();
       fireEvent.change(screen.getByLabelText("Green card date"), { target: { value: "" } });
       // The page must survive (a render crash would unmount it and make the checks below vacuous).
       expect((screen.getByLabelText("Green card date") as HTMLInputElement).value).toBe("");
       expect(screen.queryByText(/Be very careful/)).toBeNull();
       expect(screen.queryByRole("button", { name: "Yes, change it" })).toBeNull();
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
       expect(screen.getByText("Enter your green card date.")).toBeTruthy();
       expect(saveSettings).not.toHaveBeenCalled();
     });
@@ -138,13 +147,93 @@ describe("SettingsPage", () => {
       expect(saveSettings).not.toHaveBeenCalled();
     });
 
-    it("saves straight away when only the path changes", async () => {
+    function unlockPath() {
+      fireEvent.click(screen.getByRole("button", { name: "Edit path" }));
+      fireEvent.click(screen.getByRole("button", { name: "Unlock path" }));
+    }
+
+    it("(p1) shows the path locked with an Edit path button and no radios", () => {
+      setup();
+      expect(screen.getByText("🔒 3-year · spouse of a US citizen")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Edit path" })).toBeTruthy();
+      expect(screen.queryAllByRole("radio")).toHaveLength(0);
+    });
+
+    it("warns on Edit path with the same text, and Cancel path edit re-locks", () => {
+      setup();
+      fireEvent.click(screen.getByRole("button", { name: "Edit path" }));
+      expect(screen.getByText(/Your green card date drives every number in this app/)).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Cancel path edit" }));
+      expect(screen.queryAllByRole("radio")).toHaveLength(0);
+      expect(screen.getByText("🔒 3-year · spouse of a US citizen")).toBeTruthy();
+    });
+
+    it("(p2) confirms a changed path before saving, then saves on Yes", async () => {
       const { saveSettings } = setup();
+      unlockPath();
+      expect(screen.getAllByRole("radio")).toHaveLength(2);
       fireEvent.click(screen.getByLabelText(/5-year/));
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      const banner = screen.getByRole("alert");
+      expect(banner.textContent).toContain("Change your path from");
+      expect(banner.textContent).toContain("3-year · spouse of a US citizen to 5-year · standard?");
+      expect(saveSettings).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
       await waitFor(() => expect(saveSettings).toHaveBeenCalled());
-      expect(saveSettings.mock.calls[0]?.[0]).toMatchObject({ greenCardDate: "2026-09-01" });
-      expect(screen.queryByText(/Be very careful/)).toBeNull();
+      expect(saveSettings).toHaveBeenCalledWith({ greenCardDate: "2026-09-01", path: "standard5" });
+      expect(await screen.findByText("🔒 5-year · standard")).toBeTruthy();
+    });
+
+    it("(p3) lists a date change and a path change in one banner", () => {
+      const { saveSettings } = setup();
+      unlockAndChange("2026-08-15");
+      unlockPath();
+      fireEvent.click(screen.getByLabelText(/5-year/));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      const alerts = screen.getAllByRole("alert");
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]?.textContent).toContain("Change your green card date from September 1, 2026 to August 15, 2026?");
+      expect(alerts[0]?.textContent).toContain("Change your path from");
+      expect(alerts[0]?.textContent).toContain("Be very careful");
+      expect(saveSettings).not.toHaveBeenCalled();
+    });
+
+    it("Cancel on the confirmation restores both the date and the path", () => {
+      setup();
+      unlockAndChange("2026-08-15");
+      unlockPath();
+      fireEvent.click(screen.getByLabelText(/5-year/));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(screen.getByText("🔒 September 1, 2026")).toBeTruthy();
+      expect(screen.getByText("🔒 3-year · spouse of a US citizen")).toBeTruthy();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+    });
+
+    it("(s1) shows the earliest filing date for the current form values", () => {
+      setup();
+      expect(screen.getByText("Earliest filing date: June 3, 2029")).toBeTruthy();
+      unlockPath();
+      fireEvent.click(screen.getByLabelText(/5-year/));
+      expect(screen.getByText("Earliest filing date: June 3, 2031")).toBeTruthy();
+    });
+
+    it("(s1) hides the earliest filing date when the date is empty", () => {
+      setup();
+      unlockAndChange("");
+      expect(screen.queryByText(/Earliest filing date/)).toBeNull();
+    });
+
+    it("(s2) has no Save changes button until something changes", () => {
+      setup();
+      expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+      unlockPath();
+      expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+      fireEvent.click(screen.getByLabelText(/5-year/));
+      expect(screen.getByRole("button", { name: "Save changes" })).toBeTruthy();
+      fireEvent.click(screen.getByLabelText(/3-year/));
+      expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
     });
   });
 
@@ -160,19 +249,19 @@ describe("SettingsPage", () => {
       return { saveSettings };
     }
 
-    it("shows the name locked, with no name input", () => {
+    it("(n1) shows the name locked, with no name input", () => {
       setup();
       expect(screen.getByText("🔒 James")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Edit name" })).toBeTruthy();
       expect(screen.queryByLabelText(/Name shown on Home/)).toBeNull();
     });
 
-    it("edits and saves the name with no confirmation, then locks it again", async () => {
+    it("(n2) edits and saves the name with no confirmation, then locks it again", async () => {
       const { saveSettings } = setup();
       fireEvent.click(screen.getByRole("button", { name: "Edit name" }));
       expect((screen.getByLabelText(/Name shown on Home/) as HTMLInputElement).value).toBe("James");
       fireEvent.change(screen.getByLabelText(/Name shown on Home/), { target: { value: "Jim" } });
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
       await waitFor(() => expect(saveSettings).toHaveBeenCalled());
       expect(saveSettings).toHaveBeenCalledWith({ greenCardDate: "2026-09-01", path: "spouse3", displayName: "Jim" });
       expect(screen.queryByText(/Be very careful/)).toBeNull();
@@ -180,7 +269,7 @@ describe("SettingsPage", () => {
       expect(screen.queryByLabelText(/Name shown on Home/)).toBeNull();
     });
 
-    it("Cancel restores the saved name and re-locks", () => {
+    it("(n3) Cancel restores the saved name and re-locks", () => {
       const { saveSettings } = setup();
       fireEvent.click(screen.getByRole("button", { name: "Edit name" }));
       fireEvent.change(screen.getByLabelText(/Name shown on Home/), { target: { value: "Jim" } });

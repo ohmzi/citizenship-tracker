@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import type { TripInput } from "../api/travstats";
 import { TAG_ABSENCE, TAG_APP, TAG_AUTO, TAG_IGNORED } from "../domain/absences";
 import { PICKER_COUNTRIES } from "../domain/countries";
@@ -71,7 +71,17 @@ export function TripSheet({
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const headingId = useId();
+  const returnHintId = useId();
   const removeLabel = canDelete ? "Delete trip" : "Don't count this trip";
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -94,9 +104,16 @@ export function TripSheet({
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
-      <form className="sheet stack" onClick={(e) => e.stopPropagation()} onSubmit={submit} noValidate>
+      <form
+        className="sheet stack"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        onClick={(e) => e.stopPropagation()} onSubmit={submit}
+        noValidate
+      >
         <div className="sheet-head">
-          <h1>{initial ? "Edit Trip" : "Add Trip"}</h1>
+          <h1 id={headingId}>{initial ? "Edit Trip" : "Add Trip"}</h1>
           <button type="button" className="icon-button" aria-label="Close" onClick={onClose}>
             ✕
           </button>
@@ -116,14 +133,27 @@ export function TripSheet({
             ))}
           </select>
         </label>
-        <label className="field">
-          Departure Date
-          <input type="date" value={form.leave} onChange={(e) => setForm({ ...form, leave: e.target.value })} />
-        </label>
-        <label className="field">
-          Return Date (leave empty if you haven't come back yet)
-          <input type="date" value={form.ret} min={form.leave || undefined} onChange={(e) => setForm({ ...form, ret: e.target.value })} />
-        </label>
+        <div className="date-row">
+          <label className="field">
+            Departure Date
+            <input type="date" value={form.leave} onChange={(e) => setForm({ ...form, leave: e.target.value })} />
+          </label>
+          <div className="stack date-return">
+            <label className="field">
+              Return Date
+              <input
+                type="date"
+                value={form.ret}
+                min={form.leave || undefined}
+                aria-describedby={returnHintId}
+                onChange={(e) => setForm({ ...form, ret: e.target.value })}
+              />
+            </label>
+            <p id={returnHintId} className="muted" style={{ margin: 0 }}>
+              Leave empty only if you're abroad right now.
+            </p>
+          </div>
+        </div>
         {greenCardDate && form.leave && form.leave < greenCardDate && (
           <p className="muted">This trip starts before your green card date; only the days after it affect your count.</p>
         )}

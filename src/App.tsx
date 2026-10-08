@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { BottomNav } from "./components/BottomNav";
 import { DataProvider, useData } from "./state/DataContext";
 import { LoginPage } from "./pages/LoginPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 function Shell() {
   const { state, refresh, api } = useData();
@@ -24,7 +25,7 @@ function Shell() {
         <Routes>
           <Route path="/" element={<p>Home</p>} />
           <Route path="/trips" element={<p>Trips</p>} />
-          <Route path="/settings" element={<p>Settings</p>} />
+          <Route path="/settings" element={<SettingsPage data={state.data} api={api} onSaved={refresh} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

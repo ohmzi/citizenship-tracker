@@ -5,7 +5,9 @@ import type { Absence, Settings } from "./types";
 export type Warning =
   | { kind: "presumed_break"; absenceId: string; abroadDays: number }
   | { kind: "breaks_residence"; absenceId: string; abroadDays: number }
-  | { kind: "return_not_logged"; absenceId: string };
+  | { kind: "return_not_logged"; absenceId: string }
+  /** A future trip with no return date: its abroad days aren't counted yet. */
+  | { kind: "planned_without_return"; absenceId: string };
 
 export interface CountedTrip {
   absence: Absence;
@@ -165,13 +167,15 @@ export function computeSummary(settings: Settings, absences: Absence[], today: D
     const n = abroadDaysSince(a, P, today);
     if (n >= BREAK_DAYS) warnings.push({ kind: "breaks_residence", absenceId: a.id, abroadDays: n });
     else if (n > PRESUMED_BREAK_DAYS) warnings.push({ kind: "presumed_break", absenceId: a.id, abroadDays: n });
-    if (a.return === null) warnings.push({ kind: "return_not_logged", absenceId: a.id });
+    if (a.return === null) {
+      warnings.push({ kind: a.leave > today ? "planned_without_return" : "return_not_logged", absenceId: a.id });
+    }
   }
 
   const status: PresenceStatus =
     projectedApplyDate === null || projectedApplyDate > E
       ? "behind"
-      : warnings.some((w) => w.kind !== "return_not_logged")
+      : warnings.some((w) => w.kind === "breaks_residence" || w.kind === "presumed_break")
         ? "at_risk"
         : "on_track";
 

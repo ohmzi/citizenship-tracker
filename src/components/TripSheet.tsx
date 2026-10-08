@@ -14,10 +14,12 @@ export interface TripForm {
   ret: string;
 }
 
-export function validateTripForm(form: TripForm): string | null {
+export function validateTripForm(form: TripForm, today: string): string | null {
   if (form.countries.length === 0) return "Choose a country.";
   if (form.countries.some(isUsJurisdiction)) return "Time in the US or a US territory isn't an absence.";
   if (!isDay(form.leave)) return "Enter the departure date.";
+  // A planned trip with no return would count 0 days abroad.
+  if (form.leave > today && !form.ret) return "Add the return date for a planned trip.";
   if (form.ret && !isDay(form.ret)) return "Enter a valid return date.";
   if (form.ret && form.ret < form.leave) return "The return date can't be before the departure date.";
   return null;
@@ -42,12 +44,14 @@ export function ignoreTags(existingTags: string[]): string[] {
 export function TripSheet({
   initial,
   greenCardDate,
+  today,
   onSave,
   onRemove,
   onClose,
 }: {
   initial: Absence | null;
   greenCardDate: string | null;
+  today: string;
   onSave: (form: TripForm) => Promise<void>;
   onRemove?: () => Promise<void>;
   onClose: () => void;
@@ -75,7 +79,7 @@ export function TripSheet({
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const problem = validateTripForm(form);
+    const problem = validateTripForm(form, today);
     if (problem) setError(problem);
     else void run(() => onSave(form));
   }

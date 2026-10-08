@@ -104,6 +104,7 @@ export function TripsPage({ data, api, onChanged }: { data: TravelData; api: Tra
         <TripSheet
           initial={editing === "new" ? null : editing}
           greenCardDate={data.settings?.greenCardDate ?? null}
+          today={data.today}
           onSave={save}
           onRemove={editing === "new" ? undefined : remove}
           onClose={() => setEditing(null)}

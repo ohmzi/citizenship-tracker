@@ -53,4 +53,16 @@ describe("HomePage", () => {
     renderHome({ notices: [{ kind: "orphan_entry", flightId: "f9", day: "2026-11-02" }] });
     expect(screen.getByText(/You arrived in the US on Nov 2/)).toBeTruthy();
   });
+
+  it("says a planned trip without a return isn't counted yet", () => {
+    const planned: Absence = { ...canada, return: null };
+    renderHome({
+      classification: { absences: [planned], review: [], toTag: [], overlaps: [] },
+      summary: computeSummary(settings, [planned], "2026-10-07"),
+    });
+    expect(
+      screen.getByText(/has no return date, so its days abroad aren't counted yet\. Add the return flight or date\./)
+    ).toBeTruthy();
+    expect(screen.queryByText(/counts as abroad through today/)).toBeNull();
+  });
 });

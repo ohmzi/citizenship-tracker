@@ -2,20 +2,25 @@ import { ignoreTags, toTripInput, validateTripForm } from "./TripSheet";
 
 describe("trip form", () => {
   const ok = { countries: ["CA"], leave: "2026-10-23", ret: "2026-10-30" };
+  const today = "2026-10-07";
 
   it("accepts a normal trip and an open one", () => {
-    expect(validateTripForm(ok)).toBeNull();
-    expect(validateTripForm({ ...ok, ret: "" })).toBeNull();
+    expect(validateTripForm(ok, today)).toBeNull();
+    expect(validateTripForm({ ...ok, leave: "2026-10-01", ret: "" }, today)).toBeNull();
+    expect(validateTripForm({ ...ok, leave: today, ret: "" }, today)).toBeNull();
+  });
+  it("requires the return date of a planned trip", () => {
+    expect(validateTripForm({ ...ok, ret: "" }, today)).toBe("Add the return date for a planned trip.");
   });
   it("requires a country and a departure date", () => {
-    expect(validateTripForm({ ...ok, countries: [] })).toBe("Choose a country.");
-    expect(validateTripForm({ ...ok, leave: "" })).toBe("Enter the departure date.");
+    expect(validateTripForm({ ...ok, countries: [] }, today)).toBe("Choose a country.");
+    expect(validateTripForm({ ...ok, leave: "" }, today)).toBe("Enter the departure date.");
   });
   it("refuses US states and territories", () => {
-    expect(validateTripForm({ ...ok, countries: ["PR"] })).toBe("Time in the US or a US territory isn't an absence.");
+    expect(validateTripForm({ ...ok, countries: ["PR"] }, today)).toBe("Time in the US or a US territory isn't an absence.");
   });
   it("refuses a return before the departure", () => {
-    expect(validateTripForm({ ...ok, ret: "2026-10-22" })).toBe("The return date can't be before the departure date.");
+    expect(validateTripForm({ ...ok, ret: "2026-10-22" }, today)).toBe("The return date can't be before the departure date.");
   });
   it("builds the TravStats trip, dropping auto so flights never overwrite an edit", () => {
     expect(toTripInput(ok, ["us-absence", "auto", "family"])).toEqual({

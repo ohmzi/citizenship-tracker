@@ -67,6 +67,18 @@ describe("computeSummary", () => {
     expect(s.warnings).toContainEqual({ kind: "return_not_logged", absenceId: "a" });
   });
 
+  it("flags a planned trip without a return instead of calling it not logged", () => {
+    const s = computeSummary(spouse, [trip("a", "2026-11-01", null)], "2026-10-07");
+    expect(s.warnings).toEqual([{ kind: "planned_without_return", absenceId: "a" }]);
+    expect(s.status).toBe("on_track");
+  });
+
+  it("calls a trip that started today without a return not logged", () => {
+    const s = computeSummary(spouse, [trip("a", "2026-10-07", null)], "2026-10-07");
+    expect(s.warnings).toEqual([{ kind: "return_not_logged", absenceId: "a" }]);
+    expect(s.status).toBe("on_track");
+  });
+
   it("flags a presumed break over 180 days abroad", () => {
     const s = computeSummary(spouse, [trip("a", "2027-01-01", "2027-07-15")], "2026-10-07");
     expect(s.warnings).toContainEqual({ kind: "presumed_break", absenceId: "a", abroadDays: 194 });

@@ -125,7 +125,7 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
       <div className="stack">
         <p>{GUARD_TEXT}</p>
         <div className="banner-actions">
-          <button type="button" className="button ghost" aria-label={cancelLabel} onClick={onCancel}>
+          <button type="button" className="button neutral" aria-label={cancelLabel} onClick={onCancel}>
             Cancel
           </button>
           <button type="button" className="button primary" aria-label={unlockLabel} onClick={onUnlock}>
@@ -136,8 +136,10 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
     </Banner>
   );
 
+  const showSaveBar = dirty && !confirming;
+
   return (
-    <div className="stack">
+    <div className={showSaveBar ? "stack has-save-bar" : "stack"}>
       <h1>Settings</h1>
       {message && <Banner tone={message.tone}>{message.text}</Banner>}
       <form className="stack" onSubmit={save} noValidate>
@@ -171,7 +173,7 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
             </label>
           )}
           {!dateLocked && savedDate !== null && !confirming && (
-            <button type="button" className="button ghost" onClick={relockDate}>
+            <button type="button" className="button neutral" onClick={relockDate}>
               Cancel
             </button>
           )}
@@ -214,7 +216,7 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
             </fieldset>
           )}
           {!pathLocked && savedPath !== null && !confirming && (
-            <button type="button" className="button ghost" aria-label="Cancel path edit" onClick={relockPath}>
+            <button type="button" className="button neutral" aria-label="Cancel path edit" onClick={relockPath}>
               Cancel
             </button>
           )}
@@ -244,7 +246,7 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
                 <input value={displayName} maxLength={60} onChange={(e) => setDisplayName(e.target.value)} />
               </label>
               {savedName !== "" && (
-                <button type="button" className="button ghost" aria-label="Cancel name edit" onClick={cancelNameEdit}>
+                <button type="button" className="button neutral" aria-label="Cancel name edit" onClick={cancelNameEdit}>
                   Cancel
                 </button>
               )}
@@ -259,7 +261,7 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
               {pathChanged && savedPath !== null && <p>{`Change your path from ${PATH_RULES[savedPath].label} to ${PATH_RULES[path].label}?`}</p>}
               <p>This recalculates your entire timeline. Be very careful.</p>
               <div className="banner-actions">
-                <button type="button" className="button ghost" onClick={cancelConfirmation}>
+                <button type="button" className="button neutral" onClick={cancelConfirmation}>
                   Cancel
                 </button>
                 <button type="button" className="button primary" disabled={busy} onClick={() => void persist()}>
@@ -270,15 +272,12 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
           </Banner>
         )}
 
-        {dirty && !confirming && (
-          <>
-            <div className="save-spacer" aria-hidden="true" />
-            <div className="save-bar">
-              <button className="button primary" disabled={busy}>
-                Save changes
-              </button>
-            </div>
-          </>
+        {showSaveBar && (
+          <div className="save-bar">
+            <button className="button primary" disabled={busy}>
+              Save changes
+            </button>
+          </div>
         )}
       </form>
 
@@ -287,8 +286,8 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
           Account
         </h2>
         <div className="row-between">
-          <span>{`Signed in as ${data.user.username}`}</span>
-          <button type="button" className="button ghost compact" onClick={() => void logout()}>
+          <span className="signed-in">{`Signed in as ${data.user.username}`}</span>
+          <button type="button" className="button ghost logout" onClick={() => void logout()}>
             Log out
           </button>
         </div>

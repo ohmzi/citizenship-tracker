@@ -31,7 +31,7 @@ describe("SettingsPage", () => {
   it("refuses to save without a date", async () => {
     const saveSettings = vi.fn(async () => {});
     const { container } = render(<SettingsPage data={data} api={{ saveSettings } as unknown as TravStatsApi} onSaved={async () => {}} />);
-    // There is no Save button while the form is empty, but Enter in a field still submits it.
+    // submit the form directly to exercise save()
     fireEvent.submit(container.querySelector("form")!);
     expect(await screen.findByText("Enter your green card date.")).toBeTruthy();
     expect(saveSettings).not.toHaveBeenCalled();
@@ -209,6 +209,18 @@ describe("SettingsPage", () => {
       expect(screen.getByText("🔒 3-year · spouse of a US citizen")).toBeTruthy();
       expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+    });
+
+    it("choosing the saved path again dismisses the path confirmation without saving", () => {
+      const { saveSettings } = setup();
+      unlockPath();
+      fireEvent.click(screen.getByLabelText(/5-year/));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      expect(screen.getByRole("alert").textContent).toContain("Change your path from");
+      fireEvent.click(screen.getByLabelText(/3-year/));
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.queryByText(/Be very careful/)).toBeNull();
+      expect(saveSettings).not.toHaveBeenCalled();
     });
 
     it("(s1) shows the earliest filing date for the current form values", () => {

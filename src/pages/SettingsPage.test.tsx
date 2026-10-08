@@ -148,6 +148,49 @@ describe("SettingsPage", () => {
     });
   });
 
+  describe("with a saved display name", () => {
+    const saved = {
+      user: { username: "ohmz", firstName: "Omar" },
+      settings: { greenCardDate: "2026-09-01", path: "spouse3", displayName: "James" },
+    } as unknown as TravelData;
+
+    function setup() {
+      const saveSettings = vi.fn(async (_input: { greenCardDate: string; path: string; displayName?: string }) => {});
+      render(<SettingsPage data={saved} api={{ saveSettings } as unknown as TravStatsApi} onSaved={async () => {}} />);
+      return { saveSettings };
+    }
+
+    it("shows the name locked, with no name input", () => {
+      setup();
+      expect(screen.getByText("🔒 James")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Edit name" })).toBeTruthy();
+      expect(screen.queryByLabelText(/Name shown on Home/)).toBeNull();
+    });
+
+    it("edits and saves the name with no confirmation, then locks it again", async () => {
+      const { saveSettings } = setup();
+      fireEvent.click(screen.getByRole("button", { name: "Edit name" }));
+      expect((screen.getByLabelText(/Name shown on Home/) as HTMLInputElement).value).toBe("James");
+      fireEvent.change(screen.getByLabelText(/Name shown on Home/), { target: { value: "Jim" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(saveSettings).toHaveBeenCalled());
+      expect(saveSettings).toHaveBeenCalledWith({ greenCardDate: "2026-09-01", path: "spouse3", displayName: "Jim" });
+      expect(screen.queryByText(/Be very careful/)).toBeNull();
+      expect(await screen.findByText("🔒 Jim")).toBeTruthy();
+      expect(screen.queryByLabelText(/Name shown on Home/)).toBeNull();
+    });
+
+    it("Cancel restores the saved name and re-locks", () => {
+      const { saveSettings } = setup();
+      fireEvent.click(screen.getByRole("button", { name: "Edit name" }));
+      fireEvent.change(screen.getByLabelText(/Name shown on Home/), { target: { value: "Jim" } });
+      fireEvent.click(screen.getByRole("button", { name: "Cancel name edit" }));
+      expect(screen.getByText("🔒 James")).toBeTruthy();
+      expect(screen.queryByLabelText(/Name shown on Home/)).toBeNull();
+      expect(saveSettings).not.toHaveBeenCalled();
+    });
+  });
+
   it("hints which date to use when none is saved", () => {
     render(<SettingsPage data={data} api={{} as unknown as TravStatsApi} onSaved={async () => {}} />);
     expect(

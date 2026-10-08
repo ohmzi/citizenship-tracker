@@ -14,9 +14,18 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
   const [editStep, setEditStep] = useState<"locked" | "warning" | "unlocked">("locked");
   const [confirming, setConfirming] = useState(false);
   const [path, setPath] = useState<Path>(data.settings?.path ?? "spouse3");
+  const [savedName, setSavedName] = useState(data.settings?.displayName ?? "");
   const [displayName, setDisplayName] = useState(data.settings?.displayName ?? "");
+  const [editingName, setEditingName] = useState(false);
   const [message, setMessage] = useState<{ tone: "green" | "red"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const nameLocked = savedName !== "" && !editingName;
+
+  function cancelNameEdit() {
+    setDisplayName(savedName);
+    setEditingName(false);
+  }
 
   const locked = savedDate !== null && editStep !== "unlocked";
 
@@ -53,6 +62,9 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
       const name = displayName.trim();
       await api.saveSettings({ greenCardDate, path, ...(name ? { displayName: name } : {}) });
       setSavedDate(greenCardDate);
+      setSavedName(name);
+      setDisplayName(name);
+      setEditingName(false);
       setEditStep("locked");
       await onSaved();
       setMessage({ tone: "green", text: "Saved." });
@@ -138,10 +150,29 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
             </label>
           ))}
         </fieldset>
-        <label className="field">
-          Name shown on Home (optional)
-          <input value={displayName} maxLength={60} onChange={(e) => setDisplayName(e.target.value)} />
-        </label>
+        {nameLocked ? (
+          <div className="field">
+            Name shown on Home (optional)
+            <div className="locked-date">
+              <span>{`🔒 ${savedName}`}</span>
+              <button type="button" className="button ghost" aria-label="Edit name" onClick={() => setEditingName(true)}>
+                Edit
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <label className="field">
+              Name shown on Home (optional)
+              <input value={displayName} maxLength={60} onChange={(e) => setDisplayName(e.target.value)} />
+            </label>
+            {savedName !== "" && (
+              <button type="button" className="button ghost" aria-label="Cancel name edit" onClick={cancelNameEdit}>
+                Cancel
+              </button>
+            )}
+          </>
+        )}
         {confirming && savedDate !== null && isDay(greenCardDate) && (
           <Banner tone="red">
             <div className="stack">

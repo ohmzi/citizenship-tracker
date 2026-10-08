@@ -70,4 +70,69 @@ describe("reconcile", () => {
     const applied = trip({ id: "new", tags: ["us-absence", "auto"], countries: ["US", "CA"] });
     expect(reconcile([candidate({ tripIds: ["new"], looseFlightIds: [] })], [applied])).toEqual([]);
   });
+
+  it("never lets a boundary-sharing candidate claim or rewrite another's auto trip", () => {
+    const a = trip({
+      id: "A",
+      tags: ["us-absence", "auto"],
+      countries: ["MX"],
+      startDay: "2026-10-01",
+      endDay: "2026-10-10",
+    });
+    const c1 = candidate({
+      tripIds: ["A"],
+      looseFlightIds: [],
+      countries: ["MX"],
+      leave: "2026-10-01",
+      return: "2026-10-10",
+    });
+    const c2 = candidate({
+      flightIds: ["f3", "f4"],
+      tripIds: [],
+      looseFlightIds: ["f3", "f4"],
+      countries: ["CA"],
+      leave: "2026-10-10",
+      return: "2026-10-20",
+    });
+    expect(reconcile([c1, c2], [a])).toEqual([
+      {
+        kind: "create",
+        fields: { name: "Canada", countries: ["CA"], startDate: "2026-10-10", endDate: "2026-10-20" },
+        tags: ["us-absence", "auto"],
+        flightIds: ["f3", "f4"],
+      },
+    ]);
+  });
+
+  it("emits no update when two candidates own the same auto trip with different fields", () => {
+    const a = trip({
+      id: "A",
+      tags: ["us-absence", "auto"],
+      countries: ["MX"],
+      startDay: "2026-10-01",
+      endDay: "2026-10-10",
+    });
+    const c1 = candidate({
+      tripIds: ["A"],
+      looseFlightIds: [],
+      countries: ["MX"],
+      leave: "2026-10-01",
+      return: "2026-10-12",
+    });
+    const c2 = candidate({
+      tripIds: ["A"],
+      looseFlightIds: [],
+      countries: ["MX"],
+      leave: "2026-10-01",
+      return: "2026-10-15",
+    });
+    expect(reconcile([c1, c2], [a])).toEqual([]);
+  });
+
+  it("attaches loose flights to a candidate's manual trip rather than its auto trip", () => {
+    const a = trip({ id: "A", tags: ["us-absence", "auto"], startDay: "2026-10-23", endDay: "2026-10-30" });
+    const m = trip({ id: "M", tags: ["us-absence"], startDay: "2026-10-23", endDay: "2026-10-30" });
+    const ops = reconcile([candidate({ tripIds: ["A", "M"], looseFlightIds: ["f9"] })], [a, m]);
+    expect(ops).toEqual([{ kind: "attach", tripId: "M", flightIds: ["f9"] }]);
+  });
 });

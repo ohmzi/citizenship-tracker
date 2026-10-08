@@ -41,6 +41,11 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
   }
 
   async function persist() {
+    if (!isDay(greenCardDate)) {
+      setConfirming(false);
+      setMessage({ tone: "red", text: "Enter your green card date." });
+      return;
+    }
     setConfirming(false);
     setBusy(true);
     setMessage(null);
@@ -89,8 +94,21 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
         ) : (
           <label className="field">
             Green card date
-            <input type="date" value={greenCardDate} onChange={(e) => setGreenCardDate(e.target.value)} />
+            <input
+              type="date"
+              value={greenCardDate}
+              onChange={(e) => {
+                setGreenCardDate(e.target.value);
+                // Any edit dismisses the prompt; Save must be pressed again.
+                setConfirming(false);
+              }}
+            />
           </label>
+        )}
+        {!locked && savedDate !== null && !confirming && (
+          <button type="button" className="button ghost" onClick={relock}>
+            Cancel
+          </button>
         )}
         {savedDate === null && (
           <p className="muted" style={{ margin: 0 }}>
@@ -124,7 +142,7 @@ export function SettingsPage({ data, api, onSaved }: { data: TravelData; api: Tr
           Name shown on Home (optional)
           <input value={displayName} maxLength={60} onChange={(e) => setDisplayName(e.target.value)} />
         </label>
-        {confirming && savedDate !== null && (
+        {confirming && savedDate !== null && isDay(greenCardDate) && (
           <Banner tone="red">
             <div className="stack">
               <p>{`Change your green card date from ${formatLongDay(savedDate)} to ${formatLongDay(greenCardDate)}? This recalculates your entire timeline. Be very careful.`}</p>

@@ -114,6 +114,30 @@ describe("SettingsPage", () => {
       expect(screen.queryByText(/Be very careful/)).toBeNull();
     });
 
+    it("dismisses the confirmation when the date is edited, even to an empty value", () => {
+      const { saveSettings } = setup();
+      unlockAndChange("2026-08-15");
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      expect(screen.getByText(/Be very careful/)).toBeTruthy();
+      fireEvent.change(screen.getByLabelText("Green card date"), { target: { value: "" } });
+      // The page must survive (a render crash would unmount it and make the checks below vacuous).
+      expect((screen.getByLabelText("Green card date") as HTMLInputElement).value).toBe("");
+      expect(screen.queryByText(/Be very careful/)).toBeNull();
+      expect(screen.queryByRole("button", { name: "Yes, change it" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      expect(screen.getByText("Enter your green card date.")).toBeTruthy();
+      expect(saveSettings).not.toHaveBeenCalled();
+    });
+
+    it("Cancel while unlocked re-locks the saved date", () => {
+      const { saveSettings } = setup();
+      unlockAndChange("2026-08-15");
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(screen.getByText("🔒 September 1, 2026")).toBeTruthy();
+      expect(screen.queryByLabelText("Green card date")).toBeNull();
+      expect(saveSettings).not.toHaveBeenCalled();
+    });
+
     it("saves straight away when only the path changes", async () => {
       const { saveSettings } = setup();
       fireEvent.click(screen.getByLabelText(/5-year/));

@@ -4,6 +4,7 @@ import { DataProvider, useData } from "./state/DataContext";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { TripsPage } from "./pages/TripsPage";
 
 function Shell() {
   const { state, refresh, api } = useData();
@@ -25,7 +26,7 @@ function Shell() {
       <main className="page">
         <Routes>
           <Route path="/" element={<HomePage data={state.data} />} />
-          <Route path="/trips" element={<p>Trips</p>} />
+          <Route path="/trips" element={<TripsPage data={state.data} api={api} onChanged={refresh} />} />
           <Route path="/settings" element={<SettingsPage data={state.data} api={api} onSaved={refresh} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
